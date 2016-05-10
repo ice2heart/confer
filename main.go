@@ -1,6 +1,8 @@
 package main
 
 //go get gopkg.in/mattes/go-expand-tilde.v1
+//go get github.com/google/go-github/github
+//go get golang.org/x/oauth2
 
 import (
 	"crypto/md5"
@@ -13,6 +15,9 @@ import (
 	"log"
 	"os"
 
+	"golang.org/x/oauth2"
+
+	"github.com/google/go-github/github"
 	"gopkg.in/mattes/go-expand-tilde.v1"
 )
 
@@ -25,10 +30,6 @@ type Config struct {
 	Md5          string
 	LastModified int64
 }
-
-/*func getZero() int {
-	return 0
-}*/
 
 func printObj(obj jsonobject) {
 	b, err := json.Marshal(&obj)
@@ -61,6 +62,25 @@ func getTimeModified(path string) int64 {
 	return info.ModTime().Unix()
 }
 
+func getGist(token string, id string) *github.Gist {
+	ts := oauth2.StaticTokenSource(
+		&oauth2.Token{AccessToken: token},
+	)
+	tc := oauth2.NewClient(oauth2.NoContext, ts)
+
+	client := github.NewClient(tc)
+
+	gist, res, err := client.Gists.Get(id)
+	if err != nil {
+		log.Fatalf("Get gist error %v", err)
+		os.Exit(1)
+	}
+	defer res.Body.Close()
+	edit, res, err := client.Gists.Edit(id, gist) //сюда уже тыкаем обновленный гист
+	log.Print(edit, err, res)
+	return gist
+}
+
 func main() {
 	var filesData = flag.String("files", "config.json", "Files to watch")
 	flag.Parse()
@@ -88,22 +108,8 @@ func main() {
 		jsontype.Config[num].LastModified = getTimeModified(path)
 	}
 	defer printObj(jsontype)
-	/*os.Exit(0)
-	dec := json.NewDecoder(os.Stdin)
-	enc := json.NewEncoder(os.Stdout)
-	for {
-		var v map[string]interface{}
-		if err := dec.Decode(&v); err != nil {
-			log.Println(err)
-			return
-		}
-		for k := range v {
-			if k != "Name" {
-				delete(v, k)
-			}
-		}
-		if err := enc.Encode(&v); err != nil {
-			log.Println(err)
-		}
-	}*/
+
+	gist := getGist("557f984e0d1d4dbef0270f141b58054ad90fda65", "85ff262891f338732207")
+	log.Print(gist.Files)
+
 }
