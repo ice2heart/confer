@@ -128,6 +128,11 @@ func main() {
 			log.Printf("tilde error %v", err)
 			os.Exit(1)
 		}
+		_, e := os.Stat(path)
+		if e != nil {
+			log.Print("File not found ", item.Path)
+			continue
+		}
 		jsontype.Config[num].Md5 = getMd5(path)
 		jsontype.Config[num].LastModified = getTimeModified(path)
 	}
