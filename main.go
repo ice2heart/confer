@@ -77,15 +77,39 @@ func getGist(token string, id string) *github.Gist {
 	}
 	defer res.Body.Close()
 	edit, res, err := client.Gists.Edit(id, gist) //сюда уже тыкаем обновленный гист
+	/*func (b *GistBackend) Push(id string, content []byte) error {
+	gist, _, err := b.Client.Gists.Get(id)
+	if err != nil {
+		return err
+	}
+
+	gistFile := gist.Files[gistFilename]
+	contentString := string(content)
+	gistFile.Content = &contentString
+	gist.Files[gistFilename] = gistFile
+	log.Debug("Pushing content to Gist backend:", *gistFile.Content)
+
+	_, _, err = b.Client.Gists.Edit(id, gist)
+	return err
+	}	*/
 	log.Print(edit, err, res)
 	return gist
 }
 
+var filesData string
+var githubKey string
+var gistKey string
+
+func init() {
+	flag.StringVar(&filesData, "files", "config.json", "Files to watch")
+	flag.StringVar(&githubKey, "key", "", "Key to access gist")
+	flag.StringVar(&gistKey, "gist", "", "Id gist storage")
+}
+
 func main() {
-	var filesData = flag.String("files", "config.json", "Files to watch")
 	flag.Parse()
 	log.Println("Ready for working")
-	file, err := ioutil.ReadFile(*filesData)
+	file, err := ioutil.ReadFile(filesData)
 	if err != nil {
 		log.Printf("File error: %v\n", err)
 		os.Exit(1)
@@ -108,8 +132,11 @@ func main() {
 		jsontype.Config[num].LastModified = getTimeModified(path)
 	}
 	defer printObj(jsontype)
-
-	gist := getGist("557f984e0d1d4dbef0270f141b58054ad90fda65", "85ff262891f338732207")
+	if (gistKey == "") || (githubKey == "") {
+		log.Fatal("Need to set gist id and github key")
+		os.Exit(1)
+	}
+	gist := getGist(githubKey, gistKey)
 	log.Print(gist.Files)
 
 }
