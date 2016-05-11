@@ -76,23 +76,15 @@ func getGist(token string, id string) *github.Gist {
 		os.Exit(1)
 	}
 	defer res.Body.Close()
-	edit, res, err := client.Gists.Edit(id, gist) //сюда уже тыкаем обновленный гист
-	/*func (b *GistBackend) Push(id string, content []byte) error {
-	gist, _, err := b.Client.Gists.Get(id)
-	if err != nil {
-		return err
-	}
+	/*newFile := new(github.GistFile)
+	newData := "test test test"
+	newFile.Content = &newData
+	sizeData := len(newData)
+	newFile.Size = &sizeData
+	gist.Files["test.txt"] = *newFile
+	_, _, err := client.Gists.Edit(id, gist) //сюда уже тыкаем обновленный гист
 
-	gistFile := gist.Files[gistFilename]
-	contentString := string(content)
-	gistFile.Content = &contentString
-	gist.Files[gistFilename] = gistFile
-	log.Debug("Pushing content to Gist backend:", *gistFile.Content)
-
-	_, _, err = b.Client.Gists.Edit(id, gist)
-	return err
-	}	*/
-	log.Print(edit, err, res)
+	log.Print(err)*/
 	return gist
 }
 
