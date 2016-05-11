@@ -62,13 +62,17 @@ func getTimeModified(path string) int64 {
 	return info.ModTime().Unix()
 }
 
-func getGist(token string, id string) *github.Gist {
+func getClient(token string) *github.Client {
 	ts := oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: token},
 	)
 	tc := oauth2.NewClient(oauth2.NoContext, ts)
 
 	client := github.NewClient(tc)
+	return client
+}
+
+func getGist(client *github.Client, id string) *github.Gist {
 
 	gist, res, err := client.Gists.Get(id)
 	if err != nil {
@@ -133,7 +137,8 @@ func main() {
 		log.Fatal("Need to set gist id and github key")
 		os.Exit(1)
 	}
-	gist := getGist(githubKey, gistKey)
+	client := getClient(githubKey)
+	gist := getGist(client, gistKey)
 	log.Print(gist.Files)
 
 }
