@@ -1,7 +1,10 @@
 {
-  "config": [{
-    "path": "~/.zshrc"
-  }, {
-    "path": "~/.screenrc"
-  }]
+  "config": {
+    "zsh": {
+      "path": "~/.zshrc"
+    },
+    "screen": {
+      "path": "~/.screenrc"
+    }
+  }
 }

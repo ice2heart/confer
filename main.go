@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -22,7 +21,7 @@ import (
 )
 
 type jsonobject struct {
-	Config []Config
+	Config map[string]Config
 }
 
 type Config struct {
@@ -39,17 +38,25 @@ func printObj(obj jsonobject) {
 	}
 	log.Printf("%s", b)
 }
+func getFileBody(path string) []byte {
+	expand, _ := tilde.Expand(path)
+	file, err := ioutil.ReadFile(expand)
+	if err != nil {
+		log.Fatalf("getFileBody fatal: %v", err)
+		os.Exit(1)
+	}
+	return file
 
+}
 func getMd5(path string) string {
 	f, err := os.Open(path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
-		return ""
+		log.Fatalf("%s\n", err.Error())
+		os.Exit(1)
 	}
 	md5 := md5.New()
 	io.Copy(md5, f)
 	sum := md5.Sum(nil)
-	//fmt.Printf("%x\t%s\n", sum, file)
 	f.Close()
 	return hex.EncodeToString(sum)
 }
@@ -80,44 +87,54 @@ func getGist(client *github.Client, id string) *github.Gist {
 		os.Exit(1)
 	}
 	defer res.Body.Close()
-	/*newFile := new(github.GistFile)
-	newData := "test test test"
+	return gist
+}
+
+func addFile(gist *github.Gist, name github.GistFilename, data []byte) {
+	newFile := new(github.GistFile)
+	newData := string(data)
 	newFile.Content = &newData
 	sizeData := len(newData)
 	newFile.Size = &sizeData
-	gist.Files["test.txt"] = *newFile
-	_, _, err := client.Gists.Edit(id, gist) //сюда уже тыкаем обновленный гист
+	gist.Files[name] = *newFile
+}
 
-	log.Print(err)*/
-	return gist
+func updateGist(client *github.Client, id string, gist *github.Gist) {
+	_, _, err := client.Gists.Edit(id, gist)
+	if err != nil {
+		log.Fatalf("Update gist error %v", err)
+		os.Exit(1)
+	}
 }
 
 var filesData string
 var githubKey string
 var gistKey string
+var metadataName github.GistFilename
 
 func init() {
 	flag.StringVar(&filesData, "files", "config.json", "Files to watch")
 	flag.StringVar(&githubKey, "key", "", "Key to access gist")
 	flag.StringVar(&gistKey, "gist", "", "Id gist storage")
+	metadataName = ".metadata"
 }
 
 func main() {
 	flag.Parse()
-	log.Println("Ready for working")
-	file, err := ioutil.ReadFile(filesData)
-	if err != nil {
-		log.Printf("File error: %v\n", err)
+	if (gistKey == "") || (githubKey == "") {
+		log.Fatal("Need to set gist id and github key")
 		os.Exit(1)
 	}
-	var jsontype jsonobject
-	if e := json.Unmarshal(file, &jsontype); e != nil {
+	log.Println("Ready for working")
+	file := getFileBody(filesData)
+	var localMeta jsonobject
+	if e := json.Unmarshal(file, &localMeta); e != nil {
 		log.Print(e)
 		os.Exit(1)
 	}
-	log.Printf("Data %v", jsontype)
+	log.Printf("Data %v", localMeta)
 
-	for num, item := range jsontype.Config {
+	for key, item := range localMeta.Config {
 		log.Printf("Items %v", item.Path)
 		path, err := tilde.Expand(item.Path)
 		if err != nil {
@@ -129,16 +146,51 @@ func main() {
 			log.Print("File not found ", item.Path)
 			continue
 		}
-		jsontype.Config[num].Md5 = getMd5(path)
-		jsontype.Config[num].LastModified = getTimeModified(path)
-	}
-	defer printObj(jsontype)
-	if (gistKey == "") || (githubKey == "") {
-		log.Fatal("Need to set gist id and github key")
-		os.Exit(1)
+		item.Md5 = getMd5(path)
+		item.LastModified = getTimeModified(path)
+		localMeta.Config[key] = item
 	}
 	client := getClient(githubKey)
 	gist := getGist(client, gistKey)
+	gistMeta := gist.Files[metadataName]
+
+	if gistMeta.Size == nil {
+		data, err := json.Marshal(localMeta)
+		if err != nil {
+			log.Fatal(err)
+			os.Exit(1)
+		}
+		addFile(gist, metadataName, data)
+		for key, value := range localMeta.Config {
+			addFile(gist, github.GistFilename(key), getFileBody(value.Path))
+		}
+
+	} else {
+		var remoteMeta jsonobject
+		if e := json.Unmarshal([]byte(*gistMeta.Content), &remoteMeta); e != nil {
+			log.Fatal(e)
+			os.Exit(1)
+		}
+
+		for localKey, v := range localMeta.Config {
+			if val, ok := remoteMeta.Config[localKey]; ok {
+				if val.LastModified < v.LastModified {
+					remoteMeta.Config[localKey] = v
+					addFile(gist, github.GistFilename(localKey), getFileBody(v.Path))
+				}
+			} else {
+				remoteMeta.Config[localKey] = v
+				addFile(gist, github.GistFilename(localKey), getFileBody(v.Path))
+			}
+		}
+		data, err := json.Marshal(localMeta)
+		if err != nil {
+			log.Fatal(err)
+			os.Exit(1)
+		}
+		addFile(gist, metadataName, data)
+	}
 	log.Print(gist.Files)
+	updateGist(client, gistKey, gist)
 
 }
